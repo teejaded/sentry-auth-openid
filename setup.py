@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-sentry-auth-google
+sentry-auth-openid
 ==================
 
 :copyright: (c) 2016 Functional Software, Inc
@@ -17,12 +17,12 @@ tests_require = [
 ]
 
 setup(
-    name='sentry-auth-google',
+    name='sentry-auth-openid',
     version='0.2.0.dev0',
-    author='Sentry',
-    author_email='support@getsentry.com',
-    url='https://www.getsentry.com',
-    description='Google authentication provider for Sentry',
+    author='Tableflippers Anonymous',
+    author_email='cobi@jacobicarter.com',
+    url='https://github.com/tableflippersanonymous/sentry-auth-openid',
+    description='OpenID authentication provider for Sentry',
     long_description=__doc__,
     license='Apache 2.0',
     packages=find_packages(exclude=['tests']),
@@ -33,7 +33,7 @@ setup(
     include_package_data=True,
     entry_points={
         'sentry.apps': [
-            'auth_google = sentry_auth_google',
+            'auth_openid = sentry_auth_openid',
         ],
     },
     classifiers=[

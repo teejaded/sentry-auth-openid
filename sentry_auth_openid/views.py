@@ -6,17 +6,15 @@ from sentry.auth.view import AuthView, ConfigureView
 from sentry.utils import json
 
 from .constants import (
-    DOMAIN_BLOCKLIST, ERR_INVALID_DOMAIN, ERR_INVALID_RESPONSE,
+    ERR_INVALID_RESPONSE,
 )
 from .utils import urlsafe_b64decode
 
-logger = logging.getLogger('sentry.auth.google')
+logger = logging.getLogger('sentry.auth.openid')
 
 
 class FetchUser(AuthView):
-    def __init__(self, domains, version, *args, **kwargs):
-        self.domains = domains
-        self.version = version
+    def __init__(self, *args, **kwargs):
         super(FetchUser, self).__init__(*args, **kwargs)
 
     def dispatch(self, request, helper):
@@ -44,38 +42,14 @@ class FetchUser(AuthView):
             logger.error('Missing email in id_token payload: %s' % id_token)
             return helper.error(ERR_INVALID_RESPONSE)
 
-        # support legacy style domains with pure domain regexp
-        if self.version is None:
-            domain = extract_domain(payload['email'])
-        else:
-            domain = payload.get('hd')
-
-        if domain is None:
-            return helper.error(ERR_INVALID_DOMAIN % (domain,))
-
-        if domain in DOMAIN_BLOCKLIST:
-            return helper.error(ERR_INVALID_DOMAIN % (domain,))
-
-        if self.domains and domain not in self.domains:
-            return helper.error(ERR_INVALID_DOMAIN % (domain,))
-
-        helper.bind_state('domain', domain)
         helper.bind_state('user', payload)
 
         return helper.next_step()
 
 
-class GoogleConfigureView(ConfigureView):
+class OpenIDConfigureView(ConfigureView):
     def dispatch(self, request, organization, auth_provider):
         config = auth_provider.config
-        if config.get('domain'):
-            domains = [config['domain']]
-        else:
-            domains = config.get('domains')
-        return self.render('sentry_auth_google/configure.html', {
-            'domains': domains or [],
-        })
+        return self.render('sentry_auth_openid/configure.html', {})
 
 
-def extract_domain(email):
-    return email.rsplit('@', 1)[-1]

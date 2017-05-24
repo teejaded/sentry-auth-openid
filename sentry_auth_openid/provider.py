@@ -8,20 +8,19 @@ from .constants import (
     AUTHORIZE_URL, ACCESS_TOKEN_URL, CLIENT_ID, CLIENT_SECRET, DATA_VERSION,
     SCOPE
 )
-from .views import FetchUser, GoogleConfigureView
+from .views import FetchUser, OpenIDConfigureView
 
 
-class GoogleOAuth2Login(OAuth2Login):
+class OpenIDOAuth2Login(OAuth2Login):
     authorize_url = AUTHORIZE_URL
     client_id = CLIENT_ID
     scope = SCOPE
 
-    def __init__(self, domains=None):
-        self.domains = domains
-        super(GoogleOAuth2Login, self).__init__()
+    def __init__(self):
+        super(OpenIDOAuth2Login, self).__init__()
 
     def get_authorize_params(self, state, redirect_uri):
-        params = super(GoogleOAuth2Login, self).get_authorize_params(
+        params = super(OpenIDOAuth2Login, self).get_authorize_params(
             state, redirect_uri
         )
         # TODO(dcramer): ideally we could look at the current resulting state
@@ -32,54 +31,33 @@ class GoogleOAuth2Login(OAuth2Login):
         return params
 
 
-class GoogleOAuth2Provider(OAuth2Provider):
-    name = 'Google'
+class OpenIDOAuth2Provider(OAuth2Provider):
+    name = 'OpenID'
     client_id = CLIENT_ID
     client_secret = CLIENT_SECRET
 
-    def __init__(self, domain=None, domains=None, version=None, **config):
-        if domain:
-            if domains:
-                domains.append(domain)
-            else:
-                domains = [domain]
-        self.domains = domains
-        # if a domain is not configured this is part of the setup pipeline
-        # this is a bit complex in Sentry's SSO implementation as we don't
-        # provide a great way to get initial state for new setup pipelines
-        # vs missing state in case of migrations.
-        if domains is None:
-            version = DATA_VERSION
-        else:
-            version = None
-        self.version = version
-        super(GoogleOAuth2Provider, self).__init__(**config)
+    def __init__(self, **config):
+        super(OpenIDOAuth2Provider, self).__init__(**config)
 
     def get_configure_view(self):
-        return GoogleConfigureView.as_view()
+        return OpenIDConfigureView.as_view()
 
     def get_auth_pipeline(self):
         return [
-            GoogleOAuth2Login(domains=self.domains),
+            OpenIDOAuth2Login(),
             OAuth2Callback(
                 access_token_url=ACCESS_TOKEN_URL,
                 client_id=self.client_id,
                 client_secret=self.client_secret,
             ),
-            FetchUser(
-                domains=self.domains,
-                version=self.version,
-            ),
+            FetchUser(),
         ]
 
     def get_refresh_token_url(self):
         return ACCESS_TOKEN_URL
 
     def build_config(self, state):
-        return {
-            'domains': [state['domain']],
-            'version': DATA_VERSION,
-        }
+        return {}
 
     def build_identity(self, state):
         # https://developers.google.com/identity/protocols/OpenIDConnect#server-flow
