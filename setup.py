@@ -9,7 +9,7 @@ from setuptools import setup, find_packages
 
 
 install_requires = [
-    'sentry>=7.0.0',
+    'sentry>=8.0.0',
 ]
 
 tests_require = [
@@ -18,10 +18,10 @@ tests_require = [
 
 setup(
     name='sentry-auth-openid',
-    version='0.2.0.dev0',
-    author='Tableflippers Anonymous',
-    author_email='cobi@jacobicarter.com',
-    url='https://github.com/tableflippersanonymous/sentry-auth-openid',
+    version='0.2.0-rc.3',
+    author='Tom Ganem',
+    author_email='tganem@us.ibm.com',
+    url='https://github.com/tomwganem/sentry-auth-openid',
     description='OpenID authentication provider for Sentry',
     long_description=__doc__,
     license='Apache 2.0',

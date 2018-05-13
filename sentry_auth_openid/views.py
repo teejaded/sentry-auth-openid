@@ -51,5 +51,3 @@ class OpenIDConfigureView(ConfigureView):
     def dispatch(self, request, organization, auth_provider):
         config = auth_provider.config
         return self.render('sentry_auth_openid/configure.html', {})
-
-
