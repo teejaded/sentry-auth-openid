@@ -21,25 +21,25 @@ class FetchUser(AuthView):
         data = helper.fetch_state('data')
 
         try:
-            id_token = data['id_token']
+            access_token = data['access_token']
         except KeyError:
-            logger.error('Missing id_token in OAuth response: %s' % data)
+            logger.error('Missing access_token in OAuth response: %s' % data)
             return helper.error(ERR_INVALID_RESPONSE)
 
         try:
-            _, payload, _ = map(urlsafe_b64decode, id_token.split('.', 2))
+            payload = urlsafe_b64decode(access_token.split('.')[1])
         except Exception as exc:
-            logger.error(u'Unable to decode id_token: %s' % exc, exc_info=True)
+            logger.error(u'Unable to decode access_token: %s' % exc, exc_info=True)
             return helper.error(ERR_INVALID_RESPONSE)
 
         try:
             payload = json.loads(payload)
         except Exception as exc:
-            logger.error(u'Unable to decode id_token payload: %s' % exc, exc_info=True)
+            logger.error(u'Unable to load access_token payload: %s' % exc, exc_info=True)
             return helper.error(ERR_INVALID_RESPONSE)
 
         if not payload.get('email'):
-            logger.error('Missing email in id_token payload: %s' % id_token)
+            logger.error('Missing email in access_token payload: %s' % access_token)
             return helper.error(ERR_INVALID_RESPONSE)
 
         helper.bind_state('user', payload)
@@ -51,5 +51,3 @@ class OpenIDConfigureView(ConfigureView):
     def dispatch(self, request, organization, auth_provider):
         config = auth_provider.config
         return self.render('sentry_auth_openid/configure.html', {})
-
-
