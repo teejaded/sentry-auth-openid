@@ -1,23 +1,52 @@
 from __future__ import absolute_import, print_function
 
+from six.moves.urllib.parse import parse_qsl
+from sentry.http import safe_urlopen, safe_urlread
+from sentry.utils import json
+from sentry.utils.http import absolute_uri
 from sentry.auth.providers.oauth2 import (
     OAuth2Callback, OAuth2Provider, OAuth2Login
 )
 
 from .constants import (
-    AUTHORIZE_URL, ACCESS_TOKEN_URL, CLIENT_ID, CLIENT_SECRET, DATA_VERSION,
-    SCOPE
+    AUTHORIZE_URL, ACCESS_TOKEN_URL, CLIENT_ID, CLIENT_SECRET, SCOPE
 )
 from .views import FetchUser, OpenIDConfigureView
 
+import base64
+
+
+class OpenIDOAuth2Callback(OAuth2Callback):
+    access_token_url = None
+    client_id = None
+    client_secret = None
+
+    def __init__(self, **config):
+        super(OpenIDOAuth2Callback, self).__init__(**config)
+
+    def exchange_token(self, request, helper, code):
+        headers = {
+            'authorization': 'Basic ' + base64.b64encode(self.client_id + ':' + self.client_secret)
+        }
+        # TODO: this needs the auth yet
+        data = self.get_token_params(
+            code=code,
+            redirect_uri=absolute_uri(helper.get_redirect_url()),
+        )
+        req = safe_urlopen(self.access_token_url, data=data, headers=headers)
+        body = safe_urlread(req)
+        if req.headers['Content-Type'].startswith('application/x-www-form-urlencoded'):
+            return dict(parse_qsl(body))
+        return json.loads(body)
+
 
 class OpenIDOAuth2Login(OAuth2Login):
-    authorize_url = AUTHORIZE_URL
-    client_id = CLIENT_ID
-    scope = SCOPE
+    authorize_url = None
+    client_id = None
+    scope = None
 
-    def __init__(self):
-        super(OpenIDOAuth2Login, self).__init__()
+    def __init__(self, **config):
+        super(OpenIDOAuth2Login, self).__init__(**config)
 
     def get_authorize_params(self, state, redirect_uri):
         params = super(OpenIDOAuth2Login, self).get_authorize_params(
@@ -32,9 +61,12 @@ class OpenIDOAuth2Login(OAuth2Login):
 
 
 class OpenIDOAuth2Provider(OAuth2Provider):
-    name = 'OpenID'
+    name = 'openid'
     client_id = CLIENT_ID
     client_secret = CLIENT_SECRET
+    access_token_url = ACCESS_TOKEN_URL
+    authorize_url = AUTHORIZE_URL
+    scope = SCOPE
 
     def __init__(self, **config):
         super(OpenIDOAuth2Provider, self).__init__(**config)
@@ -42,11 +74,24 @@ class OpenIDOAuth2Provider(OAuth2Provider):
     def get_configure_view(self):
         return OpenIDConfigureView.as_view()
 
+    def build_config(self, state):
+        return {
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'access_token_url': self.access_token_url,
+            'authorize_url': self.authorize_url,
+            'scope': self.scope
+        }
+
     def get_auth_pipeline(self):
         return [
-            OpenIDOAuth2Login(),
-            OAuth2Callback(
-                access_token_url=ACCESS_TOKEN_URL,
+            OpenIDOAuth2Login(
+                authorize_url=self.authorize_url,
+                client_id=self.client_id,
+                scope=self.scope
+            ),
+            OpenIDOAuth2Callback(
+                access_token_url=self.access_token_url,
                 client_id=self.client_id,
                 client_secret=self.client_secret,
             ),
@@ -54,32 +99,16 @@ class OpenIDOAuth2Provider(OAuth2Provider):
         ]
 
     def get_refresh_token_url(self):
-        return ACCESS_TOKEN_URL
-
-    def build_config(self, state):
-        return {}
+        return self.access_token_url
 
     def build_identity(self, state):
-        # https://developers.google.com/identity/protocols/OpenIDConnect#server-flow
-        # data.user => {
-        #      "iss":"accounts.google.com",
-        #      "at_hash":"HK6E_P6Dh8Y93mRNtsDB1Q",
-        #      "email_verified":"true",
-        #      "sub":"10769150350006150715113082367",
-        #      "azp":"1234987819200.apps.googleusercontent.com",
-        #      "email":"jsmith@example.com",
-        #      "aud":"1234987819200.apps.googleusercontent.com",
-        #      "iat":1353601026,
-        #      "exp":1353604926,
-        #      "hd":"example.com"
-        # }
         data = state['data']
         user_data = state['user']
         # TODO(dcramer): we should move towards using user_data['sub'] as the
         # primary key per the Google docs
         return {
-            'id': user_data['email'],
+            'id': user_data['sub'],
             'email': user_data['email'],
-            'name': user_data['email'],
+            'name': user_data['name'],
             'data': self.get_oauth_data(data),
         }
