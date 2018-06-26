@@ -12,7 +12,7 @@ class OpenIDOAuth2ProviderTest(TestCase):
         self.org = self.create_organization(owner=self.user)
         self.user = self.create_user('foo@example.com')
         self.auth_provider = AuthProvider.objects.create(
-            provider='openid',
+            provider='OpenID',
             organization=self.org,
         )
         super(OpenIDOAuth2ProviderTest, self).setUp()

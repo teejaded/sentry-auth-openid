@@ -9,7 +9,8 @@ from sentry.auth.providers.oauth2 import (
 )
 
 from .constants import (
-    AUTHORIZE_URL, ACCESS_TOKEN_URL, CLIENT_ID, CLIENT_SECRET, SCOPE
+    AUTHORIZE_URL, ACCESS_TOKEN_URL, CLIENT_ID, CLIENT_SECRET, SCOPE,
+    OAUTH_NAME, DATA_VERSION,
 )
 from .views import FetchUser, OpenIDConfigureView
 
@@ -45,7 +46,8 @@ class OpenIDOAuth2Login(OAuth2Login):
     client_id = None
     scope = None
 
-    def __init__(self, **config):
+    def __init__(self, domains=None, **config):
+        self.domains = domains
         super(OpenIDOAuth2Login, self).__init__(**config)
 
     def get_authorize_params(self, state, redirect_uri):
@@ -61,14 +63,29 @@ class OpenIDOAuth2Login(OAuth2Login):
 
 
 class OpenIDOAuth2Provider(OAuth2Provider):
-    name = 'openid'
+    name = OAUTH_NAME
     client_id = CLIENT_ID
     client_secret = CLIENT_SECRET
     access_token_url = ACCESS_TOKEN_URL
     authorize_url = AUTHORIZE_URL
     scope = SCOPE
 
-    def __init__(self, **config):
+    def __init__(self, domain=None, domains=None, version=None, **config):
+        if domain:
+            if domains:
+                domains.append(domain)
+            else:
+                domains = [domain]
+        self.domains = domains
+        # if a domain is not configured this is part of the setup pipeline
+        # this is a bit complex in Sentry's SSO implementation as we don't
+        # provide a great way to get initial state for new setup pipelines
+        # vs missing state in case of migrations.
+        if domains is None:
+            version = DATA_VERSION
+        else:
+            version = None
+        self.version = version
         super(OpenIDOAuth2Provider, self).__init__(**config)
 
     def get_configure_view(self):
@@ -80,12 +97,15 @@ class OpenIDOAuth2Provider(OAuth2Provider):
             'client_secret': self.client_secret,
             'access_token_url': self.access_token_url,
             'authorize_url': self.authorize_url,
-            'scope': self.scope
+            'scope': self.scope,
+            'domains': [state['domain']],
+            'version': self.version,
         }
 
     def get_auth_pipeline(self):
         return [
             OpenIDOAuth2Login(
+                domains=self.domains,
                 authorize_url=self.authorize_url,
                 client_id=self.client_id,
                 scope=self.scope
@@ -95,7 +115,10 @@ class OpenIDOAuth2Provider(OAuth2Provider):
                 client_id=self.client_id,
                 client_secret=self.client_secret,
             ),
-            FetchUser(),
+            FetchUser(
+                domains=self.domains,
+                version=self.version,
+            ),
         ]
 
     def get_refresh_token_url(self):
@@ -107,8 +130,8 @@ class OpenIDOAuth2Provider(OAuth2Provider):
         # TODO(dcramer): we should move towards using user_data['sub'] as the
         # primary key per the Google docs
         return {
-            'id': user_data['sub'],
+            'id': user_data['email'],
             'email': user_data['email'],
-            'name': user_data['name'],
+            'name': user_data['name'] or "%s %s" % (user_data['given_name'], user_data['family_name'],),
             'data': self.get_oauth_data(data),
         }
